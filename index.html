@@ -757,6 +757,103 @@
   <script src="js/dashboard.js"></script>
   <script src="js/Chart.roundedBarCharts.js"></script>
   <!-- End custom js for this page-->
+
+	<!-- ... GIỮ NGUYÊN MỌI THỨ Ở TRÊN ... -->
+
+<!-- đặt script này ngay trước </body> -->
+<script>
+(function(){
+  const API_KEY = 'YOUR_API_KEY_HERE'; // <-- thay bằng OpenWeather API key của bạn
+  const card = document.querySelector('.card-people .weather-info');
+  if(!card) return;
+
+  // Tạo sẵn skeleton để hiển thị trong lúc tải
+  card.innerHTML = `
+    <div class="d-flex align-items-center">
+      <div>
+        <h2 class="mb-0 font-weight-normal" id="wx-temp">
+          <i class="icon-sun mr-2"></i>—<sup>C</sup>
+        </h2>
+      </div>
+      <div class="ml-2">
+        <h4 class="location font-weight-normal" id="wx-city">Đang lấy vị trí…</h4>
+        <h6 class="font-weight-normal" id="wx-country">—</h6>
+      </div>
+    </div>
+  `;
+
+  const elTemp    = () => document.getElementById('wx-temp');
+  const elCity    = () => document.getElementById('wx-city');
+  const elCountry = () => document.getElementById('wx-country');
+
+  const TTL = 10 * 60 * 1000; // cache 10 phút
+
+  function cacheGet(key){
+    try{
+      const j = JSON.parse(localStorage.getItem(key));
+      if(j && Date.now() - j.t < TTL) return j.data;
+    }catch{}
+    return null;
+  }
+  function cacheSet(key, data){
+    localStorage.setItem(key, JSON.stringify({t: Date.now(), data}));
+  }
+
+  function regionName(iso2){
+    try{
+      return new Intl.DisplayNames(['vi', 'en'], {type:'region'}).of(iso2) || iso2 || '';
+    }catch{ return iso2 || ''; }
+  }
+
+  function render(w){
+    const c    = Math.round(w.main?.temp ?? 0);
+    const name = w.name || 'Vị trí của bạn';
+    const cc   = w.sys?.country || '';
+    const icon = w.weather?.[0]?.icon || '01d';
+    const desc = w.weather?.[0]?.description || '';
+
+    elTemp().innerHTML = `<i class="icon-sun mr-2"></i>${c}<sup>C</sup>`;
+    elCity().textContent = name;
+    elCountry().textContent = regionName(cc);
+    // nếu muốn hiện icon OpenWeather:
+    // elTemp().insertAdjacentHTML('beforeend', ` <img src="https://openweathermap.org/img/wn/${icon}.png" alt="${desc}" style="vertical-align:middle">`);
+  }
+
+  function renderErr(msg){
+    elCity().textContent = 'Không lấy được vị trí';
+    elCountry().textContent = msg || 'Vui lòng cho phép định vị hoặc thử lại';
+  }
+
+  function fetchByLatLon(lat, lon){
+    const key = `ow:geo:${lat.toFixed(4)},${lon.toFixed(4)}`;
+    const cached = cacheGet(key);
+    if(cached){ render(cached); return; }
+
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}`
+              + `&appid=${API_KEY}&units=metric&lang=vi`;
+    fetch(url)
+      .then(r => { if(!r.ok) throw new Error('OpenWeather ' + r.status); return r.json(); })
+      .then(data => { cacheSet(key, data); render(data); })
+      .catch(e => renderErr(e.message));
+  }
+
+  function getPosition(){
+    return new Promise((resolve, reject) => {
+      if(!('geolocation' in navigator)) return reject(new Error('Trình duyệt không hỗ trợ Geolocation'));
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      });
+    });
+  }
+
+  // chạy
+  getPosition()
+    .then(pos => fetchByLatLon(pos.coords.latitude, pos.coords.longitude))
+    .catch(err => renderErr(err.message || 'Không thể truy cập vị trí'));
+})();
+</script>
 </body>
 
 </html>
